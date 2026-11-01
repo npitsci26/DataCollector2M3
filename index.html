@@ -289,4 +289,21 @@
             document.getElementById('myScore').innerText = myScore;
             db.ref("rooms/" + roomId + "/" + playerRole + "/score").set(myScore);
 
-            fruits.splice(
+            fruits.splice(i, 1);
+            if (playerRole === 'p1') db.ref("rooms/" + roomId + "/fruits").set(fruits);
+          } else if (f.y > 350) {
+            fruits.splice(i, 1);
+            if (playerRole === 'p1') db.ref("rooms/" + roomId + "/fruits").set(fruits);
+          }
+        }
+
+        if (playerRole === 'p1') {
+          db.ref("rooms/" + roomId + "/fruits").set(fruits);
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+  </script>
+</body>
+</html>
