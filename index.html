@@ -11,47 +11,55 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; }
     body { background: #0f172a; color: white; text-align: center; padding: 20px; }
     .card { background: #1e293b; border-radius: 12px; padding: 20px; max-width: 500px; margin: 0 auto; border: 1px solid #334155; }
-    input { padding: 10px; font-size: 16px; border-radius: 6px; border: none; width: 60%; margin-bottom: 10px; text-align: center; }
-    .btn { padding: 10px 20px; font-size: 16px; border-radius: 6px; border: none; background: #2563eb; color: white; cursor: pointer; margin: 5px; }
+    input { padding: 10px; font-size: 18px; border-radius: 6px; border: 1px solid #475569; width: 60%; margin-bottom: 10px; text-align: center; background: #0f172a; color: white; }
+    .btn { padding: 12px 20px; font-size: 16px; border-radius: 6px; border: none; background: #2563eb; color: white; cursor: pointer; margin: 5px; font-weight: bold; }
     .btn-green { background: #16a34a; }
+    .btn:hover { opacity: 0.9; }
     #game-area { display: none; margin-top: 20px; }
     canvas { background: #020617; border-radius: 8px; border: 2px solid #334155; width: 100%; max-width: 400px; height: 300px; }
     .hud { display: flex; justify-content: space-between; max-width: 400px; margin: 10px auto; font-size: 18px; }
+    #statusText { color: #facc15; margin-top: 10px; }
   </style>
 </head>
 <body>
 
   <div class="card" id="lobby">
     <h1>🌐 Data Collector Online</h1>
-    <p style="color: #94a3b8; margin-bottom: 20px;">เล่นแข่งกันคนละเครื่องแบบ Real-time</p>
+    <p style="color: #94a3b8; margin-bottom: 20px;">ระบบเล่นแข่งขันผ่านคนละเครื่องแบบ Real-time</p>
     
-    <button class="btn btn-green" onclick="createRoom()">➕ สร้างห้องใหม่</button>
-    <div style="margin: 15px 0;">— หรือ —</div>
-    <input type="text" id="roomInput" placeholder="กรอกรหัสห้อง (4 หลัก)" maxlength="4">
+    <button class="btn btn-green" onclick="createRoom()">➕ สร้างห้องใหม่ (Player 1)</button>
+    <div style="margin: 15px 0; color: #64748b;">— หรือ —</div>
+    <input type="text" id="roomInput" placeholder="กรอกรหัสห้อง 4 หลัก" maxlength="4">
     <br>
-    <button class="btn" onclick="joinRoom()">🔑 เข้าร่วมห้อง</button>
+    <button class="btn" onclick="joinRoom()">🔑 เข้าร่วมห้อง (Player 2)</button>
+    <div id="statusText"></div>
   </div>
 
   <div id="game-area">
     <h2 id="roomDisplay" style="color: #38bdf8;"></h2>
     <div class="hud">
-      <div>ฝั่งคุณ: <strong id="myScore" style="color:#4ade80;">0</strong></div>
+      <div>คุณ: <strong id="myScore" style="color:#4ade80;">0</strong></div>
       <div>ฝั่งตรงข้าม: <strong id="oppScore" style="color:#f87171;">0</strong></div>
     </div>
     <canvas id="gameCanvas"></canvas>
-    <p style="margin-top: 10px; color: #94a3b8;">ใช้ปุ่ม ◄ ► บนคีย์บอร์ด หรือแตะซ้าย-ขวาบนหน้าจอเพื่อเลื่อน</p>
+    <p style="margin-top: 10px; color: #94a3b8;">กดปุ่ม ◄ ► บนคีย์บอร์ด หรือปุ่มด้านล่างเพื่อขยับตะกร้า</p>
+    <div style="margin-top: 10px;">
+      <button class="btn" onclick="moveBasket(-20)">◄ ซ้าย</button>
+      <button class="btn" onclick="moveBasket(20)">ขวา ►</button>
+    </div>
   </div>
 
   <script>
-    // 1. ตั้งค่า Firebase (สามารถใช้เบสฟรีของ Firebase ได้)
+    // ⚠️ อย่าลืมใส่ URL Realtime Database ของคุณครูตรงนี้ให้ถูกต้อง
     const firebaseConfig = {
       databaseURL: "https://data-collector-demo-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
+    
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
     let roomId = "";
-    let playerRole = ""; // 'p1' หรือ 'p2'
+    let playerRole = ""; 
     let myX = 150;
     let myScore = 0;
     let oppX = 150;
@@ -65,28 +73,45 @@
     function createRoom() {
       roomId = Math.floor(1000 + Math.random() * 9000).toString();
       playerRole = "p1";
+      
+      const status = document.getElementById('statusText');
+      status.innerText = "กำลังสร้างห้อง...";
+
       db.ref("rooms/" + roomId).set({
         p1: { x: 150, score: 0 },
         p2: { x: 150, score: 0 },
         status: "waiting"
+      }).then(() => {
+        alert("สร้างห้องสำเร็จ! แจ้งรหัสนี้ให้เพื่อน: " + roomId);
+        initGame();
+      }).catch(err => {
+        status.innerText = "❌ เกิดข้อผิดพลาด: โปรดเช็กการตั้งค่า Rules ใน Firebase";
+        console.error(err);
       });
-      alert("สร้างห้องเรียบร้อย! รหัสห้องคือ: " + roomId);
-      initGame();
     }
 
     function joinRoom() {
-      const input = document.getElementById('roomInput').value;
-      if (!input) return alert("กรุณากรอกรหัสห้อง");
+      const input = document.getElementById('roomInput').value.trim();
+      const status = document.getElementById('statusText');
+      
+      if (!input || input.length !== 4) {
+        return alert("กรุณากรอกรหัสห้องให้ครบ 4 หลัก");
+      }
+      
       roomId = input;
       playerRole = "p2";
+      status.innerText = "กำลังค้นหาห้อง...";
       
-      db.ref("rooms/" + roomId).once('value', snapshot => {
+      db.ref("rooms/" + roomId).once('value').then(snapshot => {
         if (snapshot.exists()) {
           db.ref("rooms/" + roomId + "/status").set("playing");
           initGame();
         } else {
-          alert("ไม่พบห้องนี้");
+          status.innerText = "❌ ไม่พบรหัสห้อง " + roomId + " (กรุณาให้ P1 กดสร้างห้องก่อน)";
         }
+      }).catch(err => {
+        status.innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อ Database";
+        console.error(err);
       });
     }
 
@@ -95,8 +120,9 @@
       document.getElementById('game-area').style.display = 'block';
       document.getElementById('roomDisplay').innerText = "ห้อง: " + roomId + " (" + playerRole.toUpperCase() + ")";
 
-      // ดึงข้อมูลฝั่งตรงข้ามแบบ Real-time
       const oppRole = playerRole === 'p1' ? 'p2' : 'p1';
+      
+      // ดึงข้อมูล Realtime
       db.ref("rooms/" + roomId + "/" + oppRole).on('value', snapshot => {
         const data = snapshot.val();
         if (data) {
@@ -106,14 +132,20 @@
         }
       });
 
-      // ระบบการควบคุม
+      // คีย์บอร์ด
       window.addEventListener('keydown', e => {
-        if (e.key === 'ArrowLeft' && myX > 0) myX -= 15;
-        if (e.key === 'ArrowRight' && myX < 240) myX += 15;
-        syncMyData();
+        if (e.key === 'ArrowLeft') moveBasket(-15);
+        if (e.key === 'ArrowRight') moveBasket(15);
       });
 
       requestAnimationFrame(gameLoop);
+    }
+
+    function moveBasket(dir) {
+      if (myX + dir >= 0 && myX + dir <= 240) {
+        myX += dir;
+        syncMyData();
+      }
     }
 
     function syncMyData() {
@@ -126,12 +158,12 @@
     function gameLoop() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // วาดตะกร้าเรา (สีเขียว)
+      // ตะกร้าผู้เล่น (สีเขียว)
       ctx.fillStyle = '#22c55e';
       ctx.fillRect(myX, 260, 60, 15);
 
-      // วาดตะกร้าคู่แข่ง (สีแดง/จาง)
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.5)';
+      // ตะกร้าฝั่งตรงข้าม (สีส้ม/จาง)
+      ctx.fillStyle = 'rgba(251, 146, 60, 0.6)';
       ctx.fillRect(oppX, 260, 60, 15);
 
       requestAnimationFrame(gameLoop);
