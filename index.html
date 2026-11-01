@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Data Collector: Online Multiplayer Game</title>
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <!-- Firebase SDKs (CDN) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; user-select: none; }
     body { background: #0f172a; color: white; text-align: center; padding: 15px; overflow-x: hidden; }
@@ -21,18 +21,16 @@
     .btn-green { background: #16a34a; }
     .btn:hover { opacity: 0.9; }
 
-    /* Rules / Learning Box */
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; text-align: left; }
     .box-good { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; padding: 10px; border-radius: 8px; color: #4ade80; }
     .box-dirty { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; padding: 10px; border-radius: 8px; color: #f87171; }
     
-    /* Gameplay Canvas & Controls */
     canvas { background: #020617; border-radius: 8px; border: 2px solid #334155; width: 100%; max-width: 400px; height: 350px; }
     .hud { display: flex; justify-content: space-between; max-width: 400px; margin: 10px auto; font-size: 18px; font-weight: bold; }
     .controls-panel { display: flex; justify-content: center; gap: 20px; margin-top: 10px; }
     .ctrl-btn { padding: 15px 30px; font-size: 20px; background: #334155; color: white; border: none; border-radius: 8px; }
     
-    #statusText { color: #facc15; margin-top: 10px; }
+    #statusText { color: #facc15; margin-top: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -43,16 +41,16 @@
       <h1>🌐 Data Collector Online</h1>
       <p style="color: #94a3b8; margin-bottom: 20px;">เล่นแข่งขันคนละเครื่องแบบ Real-time (ม.3)</p>
       
-      <button class="btn btn-green" onclick="createRoom()">➕ สร้างห้องใหม่ (Player 1)</button>
+      <button class="btn btn-green" id="btnCreate" onclick="createRoom()">➕ สร้างห้องใหม่ (Player 1)</button>
       <div style="margin: 15px 0; color: #64748b;">— หรือ —</div>
       <input type="text" id="roomInput" placeholder="กรอกรหัสห้อง 4 หลัก" maxlength="4">
       <br>
-      <button class="btn" onclick="joinRoom()">🔑 เข้าร่วมห้อง (Player 2)</button>
+      <button class="btn" id="btnJoin" onclick="joinRoom()">🔑 เข้าร่วมห้อง (Player 2)</button>
       <div id="statusText"></div>
     </div>
   </div>
 
-  <!-- 2. WAITING SCREEN (แสดงเมื่อ P1 สร้างห้องแล้วรอ P2) -->
+  <!-- 2. WAITING SCREEN -->
   <div id="screen-waiting" class="screen">
     <div class="card">
       <h2>⏳ กำลังรอผู้เล่นคนที่ 2...</h2>
@@ -61,7 +59,7 @@
     </div>
   </div>
 
-  <!-- 3. LEARNING / RULE SCREEN (แสดงพร้อมกันเมื่อครบ 2 คน) -->
+  <!-- 3. LEARNING / RULE SCREEN -->
   <div id="screen-rules" class="screen">
     <div class="card">
       <h2 style="color: #38bdf8;">📚 ทบทวนความรู้ก่อนเริ่มเกม</h2>
@@ -78,9 +76,7 @@
         </div>
       </div>
 
-      <div id="startArea">
-        <!-- ปุ่มกดเริ่มจะเปลี่ยนตาม Role ของผู้เล่น -->
-      </div>
+      <div id="startArea"></div>
     </div>
   </div>
 
@@ -103,12 +99,15 @@
   </div>
 
   <script>
-    // ⚠️ อย่าลืมตรวจสอบ URL Database ของคุณครูตรงนี้
+    // ⚠️ นำ Database URL จาก Firebase Console ของคุณครูมาวางตรงนี้
     const firebaseConfig = {
       databaseURL: "https://data-collector-game-default-rtdb.asia-southeast1.firebasedatabase.app/"
     };
     
-    firebase.initializeApp(firebaseConfig);
+    // Initialize Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.database();
 
     let roomId = "";
@@ -137,22 +136,35 @@
       document.getElementById(screenId).classList.add('active');
     }
 
+    function setStatus(msg) {
+      document.getElementById('statusText').innerText = msg;
+    }
+
     function createRoom() {
+      setStatus("กำลังเชื่อมต่อฐานข้อมูล...");
+      document.getElementById('btnCreate').disabled = true;
+
       roomId = Math.floor(1000 + Math.random() * 9000).toString();
       playerRole = "p1";
-      document.getElementById('statusText').innerText = "กำลังสร้างห้อง...";
 
-      db.ref("rooms/" + roomId).set({
+      const roomRef = db.ref("rooms/" + roomId);
+      
+      roomRef.set({
         p1: { x: 120, score: 0 },
         p2: { x: 120, score: 0 },
         status: "waiting",
         fruits: []
-      }).then(() => {
-        document.getElementById('displayRoomCode').innerText = roomId;
-        showScreen('screen-waiting');
-        listenToRoomStatus();
-      }).catch(err => {
-        document.getElementById('statusText').innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อ";
+      }, function(error) {
+        document.getElementById('btnCreate').disabled = false;
+        if (error) {
+          setStatus("❌ เกิดข้อผิดพลาด: โปรดเช็กการตั้งค่า Rules บน Firebase");
+          console.error(error);
+        } else {
+          setStatus("");
+          document.getElementById('displayRoomCode').innerText = roomId;
+          showScreen('screen-waiting');
+          listenToRoomStatus();
+        }
       });
     }
 
@@ -162,44 +174,45 @@
       
       roomId = input;
       playerRole = "p2";
-      document.getElementById('statusText').innerText = "กำลังเข้าห้อง...";
+      setStatus("กำลังค้นหาห้อง...");
+      document.getElementById('btnJoin').disabled = true;
 
-      db.ref("rooms/" + roomId).once('value').then(snapshot => {
+      db.ref("rooms/" + roomId).once('value', function(snapshot) {
+        document.getElementById('btnJoin').disabled = false;
         if (snapshot.exists()) {
-          // แจ้งระบบว่ามี P2 เข้ามาแล้ว ให้เปลี่ยนสถานะเป็น ready_to_learn
+          setStatus("");
           db.ref("rooms/" + roomId + "/status").set("ready_to_learn");
           listenToRoomStatus();
         } else {
-          document.getElementById('statusText').innerText = "❌ ไม่พบรหัสห้อง " + roomId;
+          setStatus("❌ ไม่พบรหัสห้อง " + roomId + " (กรุณาให้ P1 กดสร้างห้องก่อน)");
         }
+      }, function(error) {
+        document.getElementById('btnJoin').disabled = false;
+        setStatus("❌ การเชื่อมต่อล้มเหลว");
+        console.error(error);
       });
     }
 
     function listenToRoomStatus() {
       const startArea = document.getElementById('startArea');
 
-      // ตรวจจับการเปลี่ยนแปลงสถานะห้อง
-      db.ref("rooms/" + roomId + "/status").on('value', snapshot => {
+      db.ref("rooms/" + roomId + "/status").on('value', function(snapshot) {
         const status = snapshot.val();
 
         if (status === "ready_to_learn") {
-          // สลับมาหน้าความรู้ทั้งสองเครื่อง
           showScreen('screen-rules');
-          
           if (playerRole === 'p1') {
             startArea.innerHTML = `<button class="btn btn-green" style="font-size:20px; width:100%;" onclick="p1ClickStart()">🚀 เริ่มเกมเลย!</button>`;
           } else {
             startArea.innerHTML = `<p style="color:#facc15; font-size:18px;">⏳ รอ Player 1 กดปุ่มเริ่มเกม...</p>`;
           }
         } else if (status === "playing") {
-          // เมื่อ P1 กดเริ่มแล้ว สลับเข้ากระดานเกมพร้อมกัน
           initGameplay();
         }
       });
     }
 
     function p1ClickStart() {
-      // P1 กดเริ่ม ปรับสถานะใน DB เป็น playing
       db.ref("rooms/" + roomId + "/status").set("playing");
     }
 
@@ -213,8 +226,7 @@
       gameActive = true;
       if (playerRole === 'p1') startFruitSpawner();
 
-      // ซิงก์ตำแหน่งและคะแนน
-      db.ref("rooms/" + roomId + "/" + oppRole).on('value', snapshot => {
+      db.ref("rooms/" + roomId + "/" + oppRole).on('value', function(snapshot) {
         const data = snapshot.val();
         if (data) {
           oppX = data.x;
@@ -223,12 +235,11 @@
         }
       });
 
-      // ซิงก์ผลไม้
-      db.ref("rooms/" + roomId + "/fruits").on('value', snapshot => {
+      db.ref("rooms/" + roomId + "/fruits").on('value', function(snapshot) {
         fruits = snapshot.val() || [];
       });
 
-      window.addEventListener('keydown', e => {
+      window.addEventListener('keydown', function(e) {
         if (e.key === 'ArrowLeft') moveBasket(-15);
         if (e.key === 'ArrowRight') moveBasket(15);
       });
@@ -237,7 +248,7 @@
     }
 
     function startFruitSpawner() {
-      setInterval(() => {
+      setInterval(function() {
         if (!gameActive) return;
         const item = fruitItems[Math.floor(Math.random() * fruitItems.length)];
         const newFruit = {
@@ -266,7 +277,7 @@
       ctx.fillStyle = '#22c55e';
       ctx.fillRect(myX, 310, 60, 15);
 
-      // ตะกร้าคู่แข่ง (สีส้ม/โปร่งแสง)
+      // ตะกร้าคู่แข่ง (สีส้ม)
       ctx.fillStyle = 'rgba(251, 146, 60, 0.6)';
       ctx.fillRect(oppX, 310, 60, 15);
 
